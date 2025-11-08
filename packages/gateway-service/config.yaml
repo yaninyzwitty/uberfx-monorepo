@@ -1,0 +1,10 @@
+database:
+  username: yaninyzwitty
+  host: vague-echidna-13927.j77.aws-eu-central-1.cockroachlabs.cloud
+  database: defaultdb
+  port: 26257
+  sslmode: verify-full
+  password: testpassword
+server:
+  gateway_port: 8080
+  product_service_port: 50051
