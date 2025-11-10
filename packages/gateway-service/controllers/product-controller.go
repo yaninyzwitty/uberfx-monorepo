@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
 	"github.com/yaninyzwitty/go-fx-v1/packages/gateway-service/internal/router"
@@ -26,6 +27,18 @@ type Params struct {
 type ProductController struct {
 	logger *zap.Logger
 	client productsv1.ProductServiceClient
+}
+type routeType int
+
+const (
+	routeTypeUnknown routeType = iota
+	routeTypeCollection
+	routeTypeItem
+)
+
+type parsedRoute struct {
+	Type routeType
+	ID   int64
 }
 
 // NewProductController creates a new product controller
@@ -55,11 +68,13 @@ func (h *ProductsRouteHandler) Patterns() []string {
 }
 
 func (h *ProductsRouteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	basePath := "/api/v1/products" // base path without trailing slash
-
-	// Handle exact match for collection endpoint: /api/v1/products
-	if path == basePath {
+	route := h.parseRoute(r.URL.Path)
+	if route == nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	switch route.Type {
+	case routeTypeCollection:
 		switch r.Method {
 		case http.MethodGet:
 			h.handleListProducts(w, r)
@@ -68,41 +83,21 @@ func (h *ProductsRouteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-		return
-	}
 
-	// Handle item endpoints: /api/v1/products/{id}
-	if len(path) > len(basePath)+1 && path[:len(basePath)+1] == basePath+"/" {
-		// Extract ID from path: /api/v1/products/{id}
-		idStr := path[len(basePath)+1:]
-		// Check if there are more path segments (e.g., /api/v1/products/123/something)
-		// If so, this is not a valid product ID endpoint
-		for i := 0; i < len(idStr); i++ {
-			if idStr[i] == '/' {
-				http.Error(w, "Invalid product path", http.StatusBadRequest)
-				return
-			}
-		}
-
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid product ID", http.StatusBadRequest)
-			return
-		}
-
+	case routeTypeItem:
 		switch r.Method {
 		case http.MethodGet:
-			h.handleGetProduct(w, r, id)
+			h.handleGetProduct(w, r, route.ID)
 		case http.MethodDelete:
-			h.handleDeleteProduct(w, r, id)
+			h.handleDeleteProduct(w, r, route.ID)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-		return
+
+	default:
+		http.Error(w, "Not found", http.StatusNotFound)
 	}
 
-	// If we get here, the path doesn't match our expected patterns
-	http.Error(w, "Not found", http.StatusNotFound)
 }
 
 func (h *ProductsRouteHandler) handleGetProduct(w http.ResponseWriter, r *http.Request, id int64) {
@@ -233,3 +228,28 @@ var Module = fx.Module("controllers",
 		),
 	),
 )
+
+func (h *ProductsRouteHandler) parseRoute(path string) *parsedRoute {
+	basePath := "/api/v1/products"
+
+	if path == basePath {
+		return &parsedRoute{Type: routeTypeCollection}
+	}
+
+	if strings.HasPrefix(path, basePath+"/") && len(path) > len(basePath)+1 {
+		idStr := path[len(basePath)+1:]
+
+		if strings.Contains(idStr, "/") {
+			return nil
+		}
+
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			return nil
+		}
+
+		return &parsedRoute{Type: routeTypeItem, ID: id}
+	}
+
+	return nil
+}
