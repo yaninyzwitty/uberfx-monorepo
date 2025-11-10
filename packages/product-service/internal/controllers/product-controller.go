@@ -1,3 +1,5 @@
+// Package controllers implements gRPC service handlers for product operations.
+
 package controllers
 
 import (
@@ -55,7 +57,6 @@ func (c *ProductServiceHandler) GetProduct(ctx context.Context, req *productsv1.
 
 	product, err := c.queries.GetProductByID(ctx, req.GetId())
 	if err != nil {
-		c.log.Error("failed to get product", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to get product: %v", err)
 	}
 
@@ -70,11 +71,12 @@ func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv
 		Offset: int32(req.GetPageToken()),
 	})
 	if err != nil {
-		c.log.Error("failed to list products", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to list products: %v", err)
 	}
 
-	resp := &productsv1.ListProductsResponse{}
+	resp := &productsv1.ListProductsResponse{
+		Products: make([]*productsv1.Product, 0, len(products)),
+	}
 	for _, p := range products {
 		resp.Products = append(resp.Products, mapDBToProto(p))
 	}
@@ -95,7 +97,6 @@ func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *products
 
 	id, err := c.ids.NextID()
 	if err != nil {
-		c.log.Error("failed to generate product ID", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to generate product ID: %v", err)
 	}
 
@@ -111,7 +112,6 @@ func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *products
 		StockQuantity: int32(req.GetStockQuantity()),
 	})
 	if err != nil {
-		c.log.Error("failed to create product", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to create product: %v", err)
 	}
 
@@ -127,24 +127,22 @@ func (c *ProductServiceHandler) DeleteProduct(ctx context.Context, req *products
 
 	err := c.queries.DeleteProduct(ctx, req.GetId())
 	if err != nil {
-		c.log.Error("failed to delete product", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to delete product: %v", err)
 	}
 
-	deleted := err == nil
 	return &productsv1.DeleteProductResponse{
-		Success: deleted,
+		Success: true,
 	}, nil
 }
 
 func mapDBToProto(p repository.Product) *productsv1.Product {
 	return &productsv1.Product{
-		Id:            (uint64(p.ID)),
-		Name:          (p.Name),
-		Description:   (p.Description.String),
-		Price:         (p.Price),
-		Currency:      (p.Currency),
-		StockQuantity: (uint32(p.StockQuantity)),
+		Id:            uint64(p.ID),
+		Name:          p.Name,
+		Description:   p.Description.String,
+		Price:         p.Price,
+		Currency:      p.Currency,
+		StockQuantity: uint32(p.StockQuantity),
 		CreatedAt:     timestamppb.New(p.CreatedAt),
 		UpdatedAt:     timestamppb.New(p.UpdatedAt),
 	}
