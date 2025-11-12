@@ -1,0 +1,55 @@
+name: Unit Tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.23"
+
+jobs:
+  detect-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set-modules.outputs.modules }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Detect Go Modules
+        id: set-modules
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          MODULES="$(find . -name 'go.mod' -not -path '*/vendor/*' -exec dirname {} \; | jq -R -s -c 'split("\n")[:-1]')"
+          echo "modules=$MODULES" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: detect-modules
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: ${{ fromJSON(needs.detect-modules.outputs.modules) }}
+      fail-fast: false
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests
+        working-directory: ${{ matrix.module }}
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.module }}
+          path: ${{ matrix.module }}/coverage.out
