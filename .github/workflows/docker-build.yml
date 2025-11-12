@@ -2,64 +2,44 @@ name: Docker Build and Push
 
 on:
   push:
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
 
 jobs:
-  detect-modules:
+  detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      modules: ${{ steps.filter.outputs.modules }}
+      services: ${{ steps.filter.outputs.changes }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # 🔍 Step 1: Detect all modules that have a Dockerfile
-      - name: Detect Dockerized modules
-        id: set-modules
-        run: |
-          MODULES=$(find ./packages -maxdepth 1 -type d -exec test -e "{}/Dockerfile" ';' -print | jq -R -s -c 'split("\n")[:-1]')
-          echo "Detected modules: $MODULES"
-          echo "modules=$MODULES" >> $GITHUB_OUTPUT
-
-      # 🔍 Step 2: Use dorny/paths-filter to detect which modules changed
-      - name: Detect changed modules
-        id: filter
+      - name: Detect changed services
         uses: dorny/paths-filter@v3
+        id: filter
         with:
+          list-files: 'json'
           filters: |
             product-service:
               - 'packages/product-service/**'
+              - 'packages/shared/**'
+              - 'gen/**'
+              - 'go.work*'
             gateway-service:
               - 'packages/gateway-service/**'
-            shared:
               - 'packages/shared/**'
-      
-      # Combine detected modules and changed ones dynamically
-      - name: Filter changed modules dynamically
-        id: set-changed
-        run: |
-          ALL_MODULES=${{ steps.set-modules.outputs.modules }}
-          CHANGED=()
-
-          for MODULE in $(echo $ALL_MODULES | jq -r '.[]'); do
-            BASE=$(basename $MODULE)
-            if [ "${{ steps.filter.outputs[$BASE] }}" == "true" ] || [ "${{ steps.filter.outputs.shared }}" == "true" ]; then
-              CHANGED+=("$MODULE")
-            fi
-          done
-
-          FINAL=$(printf '%s\n' "${CHANGED[@]}" | jq -R -s -c 'split("\n")[:-1]')
-          echo "Building modules: $FINAL"
-          echo "modules=$FINAL" >> $GITHUB_OUTPUT
+              - 'gen/**'
+              - 'go.work*'
 
   build:
-    needs: detect-modules
-    if: ${{ needs.detect-modules.outputs.modules != '[]' }}
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module: ${{ fromJson(needs.detect-modules.outputs.modules) }}
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
 
     steps:
       - name: Checkout repository
@@ -74,19 +54,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Verify Docker context path
-        run: |
-          if [ ! -d "${{ matrix.module }}" ]; then
-            echo "❌ Path not found: ${{ matrix.module }}"
-            exit 1
-          fi
-
       - name: Build and Push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.module }}
+          context: .
+          file: ./packages/${{ matrix.service }}/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ vars.DOCKER_USERNAME }}/$(basename ${{ matrix.module }}):latest
-            ${{ vars.DOCKER_USERNAME }}/$(basename ${{ matrix.module }}):${{ github.sha }}
+            ${{ vars.DOCKER_USERNAME }}/${{ matrix.service }}:latest
+            ${{ vars.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
