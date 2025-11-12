@@ -42,6 +42,9 @@ var Module = fx.Module("controllers",
 	),
 )
 
+const defaultPageSize = uint32(10)
+const defaultPageToken = uint32(0)
+
 func NewProductServiceHandler(p Params) *ProductServiceHandler {
 	return &ProductServiceHandler{
 		log:     p.Logger.Named("product_controller"),
@@ -66,9 +69,19 @@ func (c *ProductServiceHandler) GetProduct(ctx context.Context, req *productsv1.
 }
 
 func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv1.ListProductsRequest) (*productsv1.ListProductsResponse, error) {
+	pageSize := req.GetPageSize()
+	pageToken := req.GetPageToken()
+
+	if pageSize == 0 {
+		pageSize = defaultPageSize
+	}
+	if pageToken == 0 {
+		pageToken = defaultPageToken
+	}
+
 	products, err := c.queries.ListProducts(ctx, repository.ListProductsParams{
-		Limit:  int32(req.GetPageSize()),
-		Offset: int32(req.GetPageToken()),
+		Limit:  int32(pageSize),
+		Offset: int32(pageToken),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list products: %v", err)

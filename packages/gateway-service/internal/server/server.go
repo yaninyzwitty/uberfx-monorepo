@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
 	"go.uber.org/fx"
@@ -39,7 +40,22 @@ func NewHTTPServer(p Params) *http.Server {
 				return err
 			}
 			p.Logger.Info("http server starting", zap.String("addr", srv.Addr))
-			go srv.Serve(ln)
+			// go srv.Serve(ln)
+			srvError := make(chan error, 1)
+			go func() {
+				if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+					srvError <- fmt.Errorf("server serve error: %w", err)
+				}
+			}()
+
+			select {
+			case <-srvError:
+				return fmt.Errorf("server failed to start: %w", err)
+			case <-time.After(100 * time.Millisecond):
+				p.Logger.Info("http server started", zap.String("addr", srv.Addr))
+
+			default:
+			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {

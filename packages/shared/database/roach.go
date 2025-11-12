@@ -31,7 +31,7 @@ var Module = fx.Module("database",
 )
 
 func NewPool(p Params) (*pgxpool.Pool, error) {
-	cfg := p.Cfg
+	config := p.Cfg
 
 	if err := godotenv.Load(); err != nil {
 		p.Log.Warn("No .env file found, proceeding with environment variables")
@@ -40,7 +40,7 @@ func NewPool(p Params) (*pgxpool.Pool, error) {
 	// Prefer environment variable, fall back to config file
 	password := os.Getenv("DB_PASSWORD")
 	if password == "" {
-		password = cfg.DbConfig.Password
+		password = config.DbConfig.Password
 		if password == "" {
 			return nil, fmt.Errorf("DB_PASSWORD env variable not set and password not found in config")
 		}
@@ -48,15 +48,15 @@ func NewPool(p Params) (*pgxpool.Pool, error) {
 
 	// Properly encode username and password for URL userinfo
 	// Use url.UserPassword which handles encoding correctly
-	user := url.UserPassword(cfg.DbConfig.Username, password)
+	user := url.UserPassword(config.DbConfig.Username, password)
 
 	// Build the connection URL properly
 	connURL := &url.URL{
 		Scheme:   "postgres",
 		User:     user,
-		Host:     fmt.Sprintf("%s:%d", cfg.DbConfig.Host, cfg.DbConfig.Port),
-		Path:     "/" + cfg.DbConfig.Database,
-		RawQuery: fmt.Sprintf("sslmode=%s", url.QueryEscape(cfg.DbConfig.SslMode)),
+		Host:     fmt.Sprintf("%s:%d", config.DbConfig.Host, config.DbConfig.Port),
+		Path:     "/" + config.DbConfig.Database,
+		RawQuery: fmt.Sprintf("sslmode=%s", url.QueryEscape(config.DbConfig.SslMode)),
 	}
 
 	connString := connURL.String()

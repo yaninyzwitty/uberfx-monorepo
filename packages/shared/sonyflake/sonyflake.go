@@ -2,6 +2,7 @@ package sonyflake
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/sony/sonyflake"
@@ -30,7 +31,7 @@ var Module = fx.Module("sonyflake",
 
 func (g *sonyflakeGenerator) NextID() (uint64, error) {
 	if g.sf == nil {
-		return 0, errors.New("sonyflake generator not initialized")
+		return 0, fmt.Errorf("sonyflake generator not initialized: generator is nil")
 	}
 	return g.sf.NextID()
 }
