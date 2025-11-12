@@ -6,5 +6,6 @@ database:
   sslmode: verify-full
   password: testpassword
 server:
+  debug: true
   gateway_port: 8080
   product_service_port: 50051

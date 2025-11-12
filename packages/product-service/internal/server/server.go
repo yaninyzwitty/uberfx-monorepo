@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
@@ -60,9 +61,10 @@ func NewServer(p Params) *grpc.Server {
 	// Register product service
 	productsv1.RegisterProductServiceServer(s, p.ProductService)
 
-	// add server reflection
-	// TODO - add debug mode in config so that server reflection only works when dev not production
-	reflection.Register(s)
+	// Only add server reflection when debug mode is on
+	if p.Config.ServerConfig.Debug {
+		reflection.Register(s)
+	}
 
 	// Register health check service (used for Kubernetes probes)
 	healthCheck := health.NewServer()
@@ -85,11 +87,21 @@ func NewServer(p Params) *grpc.Server {
 				return fmt.Errorf("failed to listen on %s: %w", addr, err)
 			}
 
+			serverError := make(chan error, 1)
 			go func() {
-				if err := s.Serve(l); err != nil {
-					p.Logger.Error("gRPC server stopped with error", zap.Error(err))
+				if err := s.Serve(l); err != nil && err != grpc.ErrServerStopped {
+					serverError <- fmt.Errorf("server serve error: %w", err)
 				}
 			}()
+
+			// we verify if the server started
+			select {
+			case err := <-serverError:
+				return fmt.Errorf("server failed to start: %w", err)
+			case <-time.After(100 * time.Millisecond):
+				p.Logger.Info("grpc server started", zap.String("addr", addr))
+			default:
+			}
 
 			return nil
 		},

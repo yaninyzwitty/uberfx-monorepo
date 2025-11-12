@@ -20,12 +20,13 @@ type DbConfig struct {
 	Database string `yaml:"database"`
 	Port     int    `yaml:"port"`
 	SslMode  string `yaml:"sslmode"`
-	Password string `yaml:"password"` // Optional: can be overridden by DB_PASSWORD env var
+	Password string `yaml:"password"`
 }
 
 type ServerConfig struct {
-	GatewayPort        int `yaml:"gateway_port"`
-	ProductServicePort int `yaml:"product_service_port"`
+	Debug              bool `yaml:"debug"`
+	GatewayPort        int  `yaml:"gateway_port"`
+	ProductServicePort int  `yaml:"product_service_port"`
 }
 
 // Module exports the configuration provider
@@ -35,13 +36,13 @@ var Module = fx.Module("config",
 )
 
 func NewConfig(log *zap.Logger) (*Config, error) {
-	cfgPath := os.Getenv("CONFIG_PATH")
-	if cfgPath == "" {
-		cfgPath = "config.yaml" // default fallback
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.yaml" // default fallback
 	}
 
 	// Try to read the config file
-	data, err := os.ReadFile(cfgPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		// If file doesn't exist in current directory, try common locations
 		if os.IsNotExist(err) {
@@ -54,14 +55,14 @@ func NewConfig(log *zap.Logger) (*Config, error) {
 
 			for _, altPath := range alternativePaths {
 				if data, err = os.ReadFile(altPath); err == nil {
-					cfgPath = altPath
+					configPath = altPath
 					log.Info("Found config file at alternative path", zap.String("path", altPath))
 					break
 				}
 			}
 
 			if err != nil {
-				return nil, fmt.Errorf("failed to read config file (tried: %s and alternatives): %w", cfgPath, err)
+				return nil, fmt.Errorf("failed to read config file (tried: %s and alternatives): %w", configPath, err)
 			}
 		} else {
 			return nil, fmt.Errorf("failed to read config: %w", err)
@@ -74,7 +75,7 @@ func NewConfig(log *zap.Logger) (*Config, error) {
 	}
 
 	log.Info("configuration loaded successfully",
-		zap.String("path", cfgPath),
+		zap.String("path", configPath),
 		zap.String("database_host", conf.DbConfig.Host),
 		zap.Int("product_service_port", conf.ServerConfig.ProductServicePort),
 	)
