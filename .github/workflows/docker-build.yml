@@ -5,56 +5,88 @@ on:
   pull_request:
 
 jobs:
-  changes:
+  detect-modules:
     runs-on: ubuntu-latest
     outputs:
-      product-service: ${{ steps.changes.outputs.product-service }}
-      gateway-service: ${{ steps.changes.outputs.gateway-service }}
+      modules: ${{ steps.filter.outputs.modules }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v3
-        id: changes
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # 🔍 Step 1: Detect all modules that have a Dockerfile
+      - name: Detect Dockerized modules
+        id: set-modules
+        run: |
+          MODULES=$(find ./packages -maxdepth 1 -type d -exec test -e "{}/Dockerfile" ';' -print | jq -R -s -c 'split("\n")[:-1]')
+          echo "Detected modules: $MODULES"
+          echo "modules=$MODULES" >> $GITHUB_OUTPUT
+
+      # 🔍 Step 2: Use dorny/paths-filter to detect which modules changed
+      - name: Detect changed modules
+        id: filter
+        uses: dorny/paths-filter@v3
         with:
           filters: |
             product-service:
               - 'packages/product-service/**'
-              - 'packages/shared/**'
             gateway-service:
               - 'packages/gateway-service/**'
+            shared:
               - 'packages/shared/**'
+      
+      # Combine detected modules and changed ones dynamically
+      - name: Filter changed modules dynamically
+        id: set-changed
+        run: |
+          ALL_MODULES=${{ steps.set-modules.outputs.modules }}
+          CHANGED=()
 
-  build-product:
-    needs: changes
-    if: ${{ needs.changes.outputs.product-service == 'true' }}
+          for MODULE in $(echo $ALL_MODULES | jq -r '.[]'); do
+            BASE=$(basename $MODULE)
+            if [ "${{ steps.filter.outputs[$BASE] }}" == "true" ] || [ "${{ steps.filter.outputs.shared }}" == "true" ]; then
+              CHANGED+=("$MODULE")
+            fi
+          done
+
+          FINAL=$(printf '%s\n' "${CHANGED[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          echo "Building modules: $FINAL"
+          echo "modules=$FINAL" >> $GITHUB_OUTPUT
+
+  build:
+    needs: detect-modules
+    if: ${{ needs.detect-modules.outputs.modules != '[]' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.detect-modules.outputs.modules) }}
+
     steps:
-      - uses: actions/checkout@v5
-      - uses: docker/login-action@v3
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: ./packages/product-service
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ vars.DOCKER_USERNAME }}/product-service:latest
 
-  build-gateway:
-    needs: changes
-    if: ${{ needs.changes.outputs.gateway-service == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: docker/login-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify Docker context path
+        run: |
+          if [ ! -d "${{ matrix.module }}" ]; then
+            echo "❌ Path not found: ${{ matrix.module }}"
+            exit 1
+          fi
+
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v6
         with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: ./packages/gateway-service
-          platforms: linux/amd64,linux/arm64
+          context: ${{ matrix.module }}
           push: true
-          tags: ${{ vars.DOCKER_USERNAME }}/gateway-service:latest
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ vars.DOCKER_USERNAME }}/$(basename ${{ matrix.module }}):latest
+            ${{ vars.DOCKER_USERNAME }}/$(basename ${{ matrix.module }}):${{ github.sha }}
