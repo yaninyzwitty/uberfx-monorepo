@@ -1,16 +1,14 @@
-name: Pull Request
+name: CI
 
-permissions:
-  contents: read
-  checks: write
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-on:
-  pull_request:
-    branches: [main, develop]
 
 jobs:
   lint:
@@ -19,9 +17,16 @@ jobs:
   unit-test:
     uses: ./.github/workflows/unit-test.yml
 
+  docker-build:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+
   publish-test-results:
     needs: [unit-test]
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     if: always()
     steps:
       - name: Download Artifacts

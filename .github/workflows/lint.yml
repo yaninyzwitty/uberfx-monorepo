@@ -8,8 +8,8 @@ permissions:
   id-token: write
 
 env:
-  GO_VERSION: "1.25.0"
-  GOLANGCI_LINT_VERSION: "v2.4.0"
+  GO_VERSION: "1.25"
+  GOLANGCI_LINT_VERSION: "v2.61.0"
 
 jobs:
   detect-modules:
@@ -20,7 +20,6 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v5
 
-      # ✅ Detect all Go modules across the repo
       - name: Detect Go Modules
         id: set-modules
         shell: bash
@@ -42,12 +41,11 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      # ✅ Cache Go build cache too, improves lint performance
       - name: Cache Go Build & Module Cache
         uses: actions/cache@v4
         with:
@@ -58,7 +56,6 @@ jobs:
           restore-keys: |
             go-cache-${{ runner.os }}-${{ env.GO_VERSION }}-
 
-      # ✅ Cache lint binary itself, pinned version helps cache hits
       - name: Cache golangci-lint binary
         uses: actions/cache@v4
         with:
@@ -68,8 +65,8 @@ jobs:
             golangci-lint-${{ runner.os }}-
 
       - name: Run golangci-lint (${{ matrix.module }})
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v6
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           working-directory: ${{ matrix.module }}
-          args: --timeout=5m # ✅ avoids stuck jobs in CI
+          args: --timeout=5m
