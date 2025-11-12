@@ -42,11 +42,11 @@ func main() {
 func logStartup(lc fx.Lifecycle, logger *zap.Logger) {
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
-			logger.Info("Product service starting", zap.String("service", "product"))
+			logger.Info("Product service server starting", zap.String("service", "product"))
 			return nil
 		},
 		OnStop: func(context.Context) error {
-			logger.Info("Product service stopping", zap.String("service", "product"))
+			logger.Info("Product service server stopping", zap.String("service", "product"))
 			return nil
 		},
 	})
