@@ -18,21 +18,38 @@ database:
 server:
   port: 8080
 `
-	
+
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Fatalf("Failed to temporary file name: %v", err)
+
+		}
+
+	}()
+
 	if _, err := tmpFile.WriteString(configContent); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close the temp file: %v", err)
+	}
 
 	// Set environment variable
-	os.Setenv("CONFIG_PATH", tmpFile.Name())
-	defer os.Unsetenv("CONFIG_PATH")
+	if err := os.Setenv("CONFIG_PATH", tmpFile.Name()); err != nil {
+		t.Fatalf("Failed to set the config path: %v", err)
+
+	}
+	defer func() {
+		if err := os.Unsetenv("CONFIG_PATH"); err != nil {
+			t.Fatalf("Failed to unset the config path: %v", err)
+
+		}
+
+	}()
 
 	logger := zap.NewNop()
 	cfg, err := NewConfig(logger)
