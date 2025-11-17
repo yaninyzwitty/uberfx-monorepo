@@ -51,6 +51,17 @@ jobs:
         with:
           fetch-depth: 0   
 
+      - name: Debug - List workspace files
+        run: |
+          echo "=== Workspace root files ==="
+          ls -la
+          echo "=== gen/ directory ==="
+          ls -la gen/ || echo "gen/ not found"
+          echo "=== packages/ directory ==="
+          ls -la packages/ || echo "packages/ not found"
+          echo "=== Matrix module: ${{ matrix.module }} ==="
+          ls -la "${{ matrix.module }}" || echo "${{ matrix.module }} not found"
+
       - name: Determine service name
         id: svc
         run: |
@@ -71,10 +82,10 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.module }}
+          context: .
           file: ${{ matrix.module }}/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: |
             ${{ vars.DOCKER_USERNAME }}/${{ steps.svc.outputs.name }}:latest
             ${{ vars.DOCKER_USERNAME }}/${{ steps.svc.outputs.name }}:${{ github.sha }}
