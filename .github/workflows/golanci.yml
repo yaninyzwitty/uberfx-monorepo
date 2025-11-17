@@ -2,10 +2,9 @@ name: Lint workflow [Golangci-lint]
 
 on:
   pull_request:
-    types:
-      - closed
-    branches:
-      - main
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
 
 permissions:
   contents: read
