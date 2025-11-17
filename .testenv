@@ -1,0 +1,8 @@
+# Test environment variables
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=test_db
+DB_USER=test_user
+DB_PASSWORD=test_password
+GRPC_PORT=50051
+HTTP_PORT=8080
