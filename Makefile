@@ -53,3 +53,18 @@ setup: ## Setup development environment
 	@echo "Setting up development environment..."
 	go work sync
 	go mod download
+
+# Run tests with coverage
+test-coverage: ## Run tests with coverage report
+	@echo "Running tests with coverage..."
+	go work sync
+	cd packages/product-service && go test -v -coverprofile=coverage.out ./...
+	cd packages/gateway-service && go test -v -coverprofile=coverage.out ./...
+	cd packages/shared && go test -v -coverprofile=coverage.out ./...
+
+# Run integration tests
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	go work sync
+	cd packages/product-service && go test -v -tags=integration ./...
+	cd packages/gateway-service && go test -v -tags=integration ./...
