@@ -16,7 +16,8 @@ COPY gen/ ./gen/
 
 # Copy shared module
 COPY packages/shared/ ./packages/shared/
-
+# Copy product-service module (needed for go.work)
+COPY packages/product-service/ ./packages/product-service/
 # Copy gateway-service module
 COPY packages/gateway-service/ ./packages/gateway-service/
 
