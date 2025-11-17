@@ -1,0 +1,78 @@
+name: Docker CI - Build & Push Monorepo Services
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # Step 1: Detect Go modules that have Dockerfiles
+  detect-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set-modules.outputs.modules }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Detect Go Modules with Dockerfiles
+        id: set-modules
+        shell: bash
+        run: |
+          # Find all directories containing go.mod
+          MODULE_DIRS=$(find . -name 'go.mod' -not -path '*/vendor/*' -exec dirname {} \;)
+          
+          # Keep only directories with a Dockerfile
+          MODULES_WITH_DOCKER=()
+          for dir in $MODULE_DIRS; do
+            if [ -f "$dir/Dockerfile" ]; then
+              MODULES_WITH_DOCKER+=("$dir")
+            fi
+          done
+          
+          # Convert to JSON array for matrix
+          MODULES_JSON=$(printf '%s\n' "${MODULES_WITH_DOCKER[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          
+          echo "Detected modules with Dockerfiles: $MODULES_JSON"
+          echo "modules=$MODULES_JSON" >> $GITHUB_OUTPUT
+
+  # Step 2: Build & push Docker images for each service
+  build:
+    needs: detect-modules
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.detect-modules.outputs.modules) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Determine service name
+        id: svc
+        run: |
+          # Extract folder name (service name) from module path
+          m="${{ matrix.module }}"
+          name=$(basename "$m")
+          echo "name=$name" >> $GITHUB_OUTPUT
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.module }}
+          file: ${{ matrix.module }}/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ vars.DOCKER_USERNAME }}/${{ steps.svc.outputs.name }}:latest
+            ${{ vars.DOCKER_USERNAME }}/${{ steps.svc.outputs.name }}:${{ github.sha }}
