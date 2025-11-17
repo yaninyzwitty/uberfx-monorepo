@@ -24,9 +24,10 @@ type DbConfig struct {
 }
 
 type ServerConfig struct {
-	Debug              bool `yaml:"debug"`
-	GatewayPort        int  `yaml:"gateway_port"`
-	ProductServicePort int  `yaml:"product_service_port"`
+	Debug              bool   `yaml:"debug"`
+	OTLPEndpoint       string `yaml:"otlpGrpcEndpoint"`
+	GatewayPort        int    `yaml:"gateway_port"`
+	ProductServicePort int    `yaml:"product_service_port"`
 }
 
 // Module exports the configuration provider

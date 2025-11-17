@@ -9,6 +9,7 @@ import (
 	"github.com/yaninyzwitty/go-fx-v1/packages/gateway-service/internal/router"
 	"github.com/yaninyzwitty/go-fx-v1/packages/gateway-service/internal/server"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
+	"github.com/yaninyzwitty/go-fx-v1/packages/shared/telemetry"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ func main() {
 
 		// Shared modules (order matters: config first, then dependencies)
 		config.Module,
+		telemetry.Module,
 
 		// Gateway service modules
 		grpcclient.Module,  // gRPC client must be provided before controllers

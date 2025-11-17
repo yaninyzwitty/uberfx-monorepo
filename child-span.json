@@ -1,0 +1,116 @@
+{
+    "Name": "products.v1.ProductService/CreateProduct",
+    "SpanContext": {
+            "TraceID": "900554da3641503af80ed65117a791be",
+            "SpanID": "ea6a8abe690f13e1",
+            "TraceFlags": "01",
+            "TraceState": "",
+            "Remote": false
+    },
+    "Parent": {
+            "TraceID": "900554da3641503af80ed65117a791be",
+            "SpanID": "d7e6d1c3a586f91a",
+            "TraceFlags": "01",
+            "TraceState": "",
+            "Remote": true
+    },
+    "SpanKind": 2,
+    "StartTime": "2025-11-17T17:41:32.9966499+03:00",
+    "EndTime": "2025-11-17T17:41:33.7200531+03:00",
+    "Attributes": [
+            {
+                    "Key": "rpc.service",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "products.v1.ProductService"
+                    }
+            },
+            {
+                    "Key": "rpc.method",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "CreateProduct"
+                    }
+            },
+            {
+                    "Key": "rpc.system",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "grpc"
+                    }
+            },
+            {
+                    "Key": "server.address",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "::1"
+                    }
+            },
+            {
+                    "Key": "server.port",
+                    "Value": {
+                            "Type": "INT64",
+                            "Value": 64995
+                    }
+            },
+            {
+                    "Key": "rpc.grpc.status_code",
+                    "Value": {
+                            "Type": "INT64",
+                            "Value": 0
+                    }
+            }
+    ],
+    "Events": null,
+    "Links": null,
+    "Status": {
+            "Code": "Unset",
+            "Description": ""
+    },
+    "DroppedAttributes": 0,
+    "DroppedEvents": 0,
+    "DroppedLinks": 0,
+    "ChildSpanCount": 1,
+    "Resource": [
+            {
+                    "Key": "service.name",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "unknown_service:product-service.exe"
+                    }
+            },
+            {
+                    "Key": "telemetry.sdk.language",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "go"
+                    }
+            },
+            {
+                    "Key": "telemetry.sdk.name",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "opentelemetry"
+                    }
+            },
+            {
+                    "Key": "telemetry.sdk.version",
+                    "Value": {
+                            "Type": "STRING",
+                            "Value": "1.38.0"
+                    }
+            }
+    ],
+    "InstrumentationScope": {
+            "Name": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+            "Version": "0.63.0",
+            "SchemaURL": "",
+            "Attributes": null
+    },
+    "InstrumentationLibrary": {
+            "Name": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+            "Version": "0.63.0",
+            "SchemaURL": "",
+            "Attributes": null
+    }
+}
