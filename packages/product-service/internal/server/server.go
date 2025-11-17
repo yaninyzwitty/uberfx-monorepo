@@ -8,6 +8,7 @@ import (
 
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -55,7 +56,11 @@ func loggingUnaryInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 func NewServer(p Params) *grpc.Server {
 	// Create server with logging interceptor
 	s := grpc.NewServer(
-		grpc.UnaryInterceptor(loggingUnaryInterceptor(p.Logger.Named("grpc_server"))),
+		grpc.UnaryInterceptor(
+			loggingUnaryInterceptor(p.Logger.Named("grpc_server")),
+		),
+		// otelgrpc stats
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	)
 
 	// Register product service

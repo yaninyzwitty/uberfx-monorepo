@@ -8,6 +8,7 @@ import (
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/database"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/sonyflake"
+	"github.com/yaninyzwitty/go-fx-v1/packages/shared/telemetry"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"go.uber.org/zap"
@@ -26,6 +27,7 @@ func main() {
 		config.Module,
 		database.Module,
 		sonyflake.Module,
+		telemetry.Module,
 
 		// Product service modules
 		controllers.Module,

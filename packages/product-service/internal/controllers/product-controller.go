@@ -9,6 +9,7 @@ import (
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/repository"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/sonyflake"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -22,6 +23,7 @@ type Params struct {
 	Logger      *zap.Logger
 	Queries     *repository.Queries
 	IDGenerator sonyflake.Generator
+	Tracer      trace.Tracer
 }
 
 type ProductServiceHandler struct {
@@ -29,6 +31,7 @@ type ProductServiceHandler struct {
 	log     *zap.Logger
 	queries *repository.Queries
 	ids     sonyflake.Generator
+	tracer  trace.Tracer
 }
 
 // Module exports the product service controller
@@ -50,10 +53,18 @@ func NewProductServiceHandler(p Params) *ProductServiceHandler {
 		log:     p.Logger.Named("product_controller"),
 		queries: p.Queries,
 		ids:     p.IDGenerator,
+		tracer:  p.Tracer,
 	}
 }
 
+func (c *ProductServiceHandler) startSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	return c.tracer.Start(ctx, name)
+}
+
 func (c *ProductServiceHandler) GetProduct(ctx context.Context, req *productsv1.GetProductRequest) (*productsv1.GetProductResponse, error) {
+	ctx, span := c.startSpan(ctx, "GetProduct.Handler")
+	defer span.End()
+
 	if req.GetId() == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "id is required")
 	}
@@ -69,6 +80,9 @@ func (c *ProductServiceHandler) GetProduct(ctx context.Context, req *productsv1.
 }
 
 func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv1.ListProductsRequest) (*productsv1.ListProductsResponse, error) {
+	ctx, span := c.startSpan(ctx, "ListProducts.Handler")
+	defer span.End()
+
 	pageSize := req.GetPageSize()
 	pageToken := req.GetPageToken()
 
@@ -97,6 +111,9 @@ func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv
 }
 
 func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *productsv1.CreateProductRequest) (*productsv1.CreateProductResponse, error) {
+	ctx, span := c.startSpan(ctx, "CreateProduct.Handler")
+	defer span.End()
+
 	// Validate required fields
 	if req.GetName() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "name is required")
@@ -134,6 +151,9 @@ func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *products
 }
 
 func (c *ProductServiceHandler) DeleteProduct(ctx context.Context, req *productsv1.DeleteProductRequest) (*productsv1.DeleteProductResponse, error) {
+	ctx, span := c.startSpan(ctx, "DeleteProduct.Handler")
+	defer span.End()
+
 	if req.GetId() == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "id is required")
 	}

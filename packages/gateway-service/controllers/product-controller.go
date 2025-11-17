@@ -1,17 +1,20 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
 	"github.com/yaninyzwitty/go-fx-v1/packages/gateway-service/internal/router"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -101,8 +104,11 @@ func (h *ProductsRouteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ProductsRouteHandler) handleGetProduct(w http.ResponseWriter, r *http.Request, id int64) {
+	// add telemetry metadata when sending requests
+	ctx := h.controller.contextWithTelemetry(r.Context())
+
 	req := &productsv1.GetProductRequest{Id: id}
-	resp, err := h.controller.client.GetProduct(r.Context(), req)
+	resp, err := h.controller.client.GetProduct(ctx, req)
 	if err != nil {
 		h.controller.handleError(w, err, "failed to get product")
 		return
@@ -115,6 +121,10 @@ func (h *ProductsRouteHandler) handleGetProduct(w http.ResponseWriter, r *http.R
 }
 
 func (h *ProductsRouteHandler) handleListProducts(w http.ResponseWriter, r *http.Request) {
+
+	// add telemetry metadata when sending requests
+	ctx := h.controller.contextWithTelemetry(r.Context())
+
 	// Parse query parameters
 	pageSize := uint32(10) // default
 	if ps := r.URL.Query().Get("page_size"); ps != "" {
@@ -135,7 +145,7 @@ func (h *ProductsRouteHandler) handleListProducts(w http.ResponseWriter, r *http
 		PageToken: pageToken,
 	}
 
-	resp, err := h.controller.client.ListProducts(r.Context(), req)
+	resp, err := h.controller.client.ListProducts(ctx, req)
 	if err != nil {
 		h.controller.handleError(w, err, "failed to list products")
 		return
@@ -148,6 +158,9 @@ func (h *ProductsRouteHandler) handleListProducts(w http.ResponseWriter, r *http
 }
 
 func (h *ProductsRouteHandler) handleCreateProduct(w http.ResponseWriter, r *http.Request) {
+	// add telemetry metadata when sending requests
+	ctx := h.controller.contextWithTelemetry(r.Context())
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		h.controller.logger.Error("failed to read request body", zap.Error(err))
@@ -169,7 +182,7 @@ func (h *ProductsRouteHandler) handleCreateProduct(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resp, err := h.controller.client.CreateProduct(r.Context(), &req)
+	resp, err := h.controller.client.CreateProduct(ctx, &req)
 	if err != nil {
 		h.controller.handleError(w, err, "failed to create product")
 		return
@@ -183,8 +196,11 @@ func (h *ProductsRouteHandler) handleCreateProduct(w http.ResponseWriter, r *htt
 }
 
 func (h *ProductsRouteHandler) handleDeleteProduct(w http.ResponseWriter, r *http.Request, id int64) {
+	// add telemetry metadata when sending requests
+	ctx := h.controller.contextWithTelemetry(r.Context())
+
 	req := &productsv1.DeleteProductRequest{Id: id}
-	resp, err := h.controller.client.DeleteProduct(r.Context(), req)
+	resp, err := h.controller.client.DeleteProduct(ctx, req)
 	if err != nil {
 		h.controller.handleError(w, err, "failed to delete product")
 		return
@@ -258,4 +274,13 @@ func (h *ProductsRouteHandler) parseRoute(path string) *parsedRoute {
 	}
 
 	return nil
+}
+
+func (c *ProductController) contextWithTelemetry(ctx context.Context) context.Context {
+	md := metadata.Pairs(
+		"timestamp", time.Now().Format(time.StampNano),
+		"client-id", "web-api-client-us-east-1",
+		"user-id", "some-test-user-id",
+	)
+	return metadata.NewOutgoingContext(ctx, md)
 }

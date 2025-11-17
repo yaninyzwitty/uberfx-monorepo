@@ -6,6 +6,7 @@ import (
 
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -29,7 +30,10 @@ var Module = fx.Module("grpcclient",
 
 func NewProductClient(p Params) (productsv1.ProductServiceClient, error) {
 	targetAddr := fmt.Sprintf(":%d", p.Config.ServerConfig.ProductServicePort)
-	conn, err := grpc.NewClient(targetAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(targetAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 	if err != nil {
 		p.Logger.Error("failed to create new client", zap.String("error", err.Error()))
 		return nil, err
