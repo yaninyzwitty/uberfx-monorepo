@@ -1,0 +1,88 @@
+name: Test workflow [Go Unit Tests - Monorepo]
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  detect-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set-modules.outputs.modules }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Detect Go Modules
+        id: set-modules
+        shell: bash
+        run: |
+          MODULES=$(find . -name 'go.mod' -not -path '*/vendor/*' -exec dirname {} \; | jq -R -s -c 'split("\n")[:-1]')
+          echo "Detected modules: $MODULES"
+          echo "modules=$MODULES" >> $GITHUB_OUTPUT
+
+  unit-tests:
+    needs: detect-modules
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: ${{ fromJSON(needs.detect-modules.outputs.modules) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.0'
+          cache: true
+
+      - name: Cache Go Build & Module Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-test-${{ runner.os }}-1.25.0-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-test-${{ runner.os }}-1.25.0-
+
+      - name: Run Unit Tests for ${{ matrix.module }}
+        working-directory: ${{ matrix.module }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FLAGS=()
+          ENABLE_RACE=true
+          RUN_COVERAGE=true
+
+          if [[ "$ENABLE_RACE" == "true" ]]; then
+            FLAGS+=(-race)
+          fi
+
+          if [[ "$RUN_COVERAGE" == "true" ]]; then
+            echo "Running tests with coverage for ${{ matrix.module }}..."
+            go test ./... "${FLAGS[@]}" -coverprofile=coverage.out -covermode=atomic
+          else
+            echo "Running tests for ${{ matrix.module }}..."
+            go test ./... "${FLAGS[@]}"
+          fi
+
+      - name: Sanitize module name
+        id: sanitize
+        run: |
+          SAFE_NAME=$(echo "${{ matrix.module }}" | sed 's/[\/\.]/-/g')
+          echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Coverage Artifact
+        if: ${{ RUN_COVERAGE == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ steps.sanitize.outputs.safe_name }}
+          path: ${{ matrix.module }}/coverage.out
