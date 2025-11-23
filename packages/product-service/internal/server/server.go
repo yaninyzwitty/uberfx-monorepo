@@ -4,14 +4,19 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"runtime/debug"
 	"time"
 
+	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
+
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
@@ -25,6 +30,7 @@ type Params struct {
 	Logger         *zap.Logger
 	Config         *config.Config
 	ProductService productsv1.ProductServiceServer
+	Metrics        *grpcprom.ServerMetrics
 }
 
 // Module exports the gRPC server provider
@@ -54,13 +60,21 @@ func loggingUnaryInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 }
 
 func NewServer(p Params) *grpc.Server {
+
+	// handle Panics
+	panicHandler := func(pan any) (err error) {
+		return status.Errorf(codes.Internal, "panic: %v\n%s", pan, debug.Stack())
+
+	}
 	// Create server with logging interceptor
 	s := grpc.NewServer(
-		grpc.UnaryInterceptor(
-			loggingUnaryInterceptor(p.Logger.Named("grpc_server")),
-		),
 		// otelgrpc stats
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(
+			loggingUnaryInterceptor(p.Logger.Named("grpc_server")),
+			p.Metrics.UnaryServerInterceptor(),
+			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(panicHandler)),
+		),
 	)
 
 	// Register product service
