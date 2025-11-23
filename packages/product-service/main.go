@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/yaninyzwitty/go-fx-v1/packages/product-service/internal/controllers"
+	grpcmetrics "github.com/yaninyzwitty/go-fx-v1/packages/product-service/internal/grpc-metrics"
 	"github.com/yaninyzwitty/go-fx-v1/packages/product-service/internal/server"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/config"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/database"
@@ -28,6 +29,7 @@ func main() {
 		database.Module,
 		sonyflake.Module,
 		telemetry.Module,
+		grpcmetrics.Module,
 
 		// Product service modules
 		controllers.Module,

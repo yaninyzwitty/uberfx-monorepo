@@ -1,12 +1,13 @@
 // Package controllers implements gRPC service handlers for product operations.
-
 package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	productsv1 "github.com/yaninyzwitty/go-fx-v1/gen/products/v1"
+	metrics "github.com/yaninyzwitty/go-fx-v1/packages/product-service/internal/grpc-metrics"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/repository"
 	"github.com/yaninyzwitty/go-fx-v1/packages/shared/sonyflake"
 	"go.opentelemetry.io/otel/trace"
@@ -24,6 +25,7 @@ type Params struct {
 	Queries     *repository.Queries
 	IDGenerator sonyflake.Generator
 	Tracer      trace.Tracer
+	AppMetrics  *metrics.AppMetrics
 }
 
 type ProductServiceHandler struct {
@@ -32,10 +34,9 @@ type ProductServiceHandler struct {
 	queries *repository.Queries
 	ids     sonyflake.Generator
 	tracer  trace.Tracer
+	metrics *metrics.AppMetrics
 }
 
-// Module exports the product service controller
-// Provides the gRPC service handler as a ProductServiceServer interface
 var Module = fx.Module("controllers",
 	fx.Provide(
 		fx.Annotate(
@@ -45,8 +46,11 @@ var Module = fx.Module("controllers",
 	),
 )
 
-const defaultPageSize = uint32(10)
-const defaultPageToken = uint32(0)
+const (
+	defaultPageSize  = uint32(10)
+	defaultPageToken = uint32(0)
+	dbBackend        = "postgres"
+)
 
 func NewProductServiceHandler(p Params) *ProductServiceHandler {
 	return &ProductServiceHandler{
@@ -54,6 +58,7 @@ func NewProductServiceHandler(p Params) *ProductServiceHandler {
 		queries: p.Queries,
 		ids:     p.IDGenerator,
 		tracer:  p.Tracer,
+		metrics: p.AppMetrics,
 	}
 }
 
@@ -61,20 +66,55 @@ func (c *ProductServiceHandler) startSpan(ctx context.Context, name string) (con
 	return c.tracer.Start(ctx, name)
 }
 
-func (c *ProductServiceHandler) GetProduct(ctx context.Context, req *productsv1.GetProductRequest) (*productsv1.GetProductResponse, error) {
-	ctx, span := c.startSpan(ctx, "GetProduct.Handler")
+func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *productsv1.CreateProductRequest) (*productsv1.CreateProductResponse, error) {
+	ctx, span := c.startSpan(ctx, "CreateProduct.Handler")
 	defer span.End()
 
-	if req.GetId() == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "id is required")
+	const op = "create_product"
+	timerStart := time.Now()
+
+	defer c.metrics.Duration.
+		WithLabelValues(op, dbBackend).
+		Observe(time.Since(timerStart).Seconds())
+
+	if req.GetName() == "" {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
+		return nil, status.Errorf(codes.InvalidArgument, "name is required")
+	}
+	if req.GetCurrency() == "" {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
+		return nil, status.Errorf(codes.InvalidArgument, "currency is required")
+	}
+	if req.GetPrice() <= 0 {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
+		return nil, status.Errorf(codes.InvalidArgument, "price must be greater than 0")
 	}
 
-	product, err := c.queries.GetProductByID(ctx, req.GetId())
+	id, err := c.ids.NextID()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get product: %v", err)
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
+		return nil, status.Errorf(codes.Internal, "failed to generate product ID: %v", err)
 	}
 
-	return &productsv1.GetProductResponse{
+	description := pgtype.Text{String: req.GetDescription(), Valid: req.GetDescription() != ""}
+
+	product, err := c.queries.CreateProduct(ctx, repository.CreateProductParams{
+		ID:            int64(id),
+		Name:          req.GetName(),
+		Description:   description,
+		Price:         req.GetPrice(),
+		Currency:      req.GetCurrency(),
+		StockQuantity: int32(req.GetStockQuantity()),
+	})
+	if err != nil {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
+		return nil, status.Errorf(codes.Internal, "failed to create product: %v", err)
+	}
+
+	// Optional workflow stage update
+	c.metrics.Stage.Set(2)
+
+	return &productsv1.CreateProductResponse{
 		Product: mapDBToProto(product),
 	}, nil
 }
@@ -82,6 +122,13 @@ func (c *ProductServiceHandler) GetProduct(ctx context.Context, req *productsv1.
 func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv1.ListProductsRequest) (*productsv1.ListProductsResponse, error) {
 	ctx, span := c.startSpan(ctx, "ListProducts.Handler")
 	defer span.End()
+
+	const op = "list_products"
+	timerStart := time.Now()
+
+	defer c.metrics.Duration.
+		WithLabelValues(op, dbBackend).
+		Observe(time.Since(timerStart).Seconds())
 
 	pageSize := req.GetPageSize()
 	pageToken := req.GetPageToken()
@@ -98,6 +145,7 @@ func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv
 		Offset: int32(pageToken),
 	})
 	if err != nil {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
 		return nil, status.Errorf(codes.Internal, "failed to list products: %v", err)
 	}
 
@@ -107,59 +155,29 @@ func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv
 	for _, p := range products {
 		resp.Products = append(resp.Products, mapDBToProto(p))
 	}
+
 	return resp, nil
-}
-
-func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *productsv1.CreateProductRequest) (*productsv1.CreateProductResponse, error) {
-	ctx, span := c.startSpan(ctx, "CreateProduct.Handler")
-	defer span.End()
-
-	// Validate required fields
-	if req.GetName() == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "name is required")
-	}
-	if req.GetCurrency() == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "currency is required")
-	}
-	if req.GetPrice() <= 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "price must be greater than 0")
-	}
-
-	id, err := c.ids.NextID()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to generate product ID: %v", err)
-	}
-
-	// Handle description - check if it's empty or not
-	description := pgtype.Text{String: req.GetDescription(), Valid: req.GetDescription() != ""}
-
-	product, err := c.queries.CreateProduct(ctx, repository.CreateProductParams{
-		ID:            int64(id),
-		Name:          req.GetName(),
-		Description:   description,
-		Price:         req.GetPrice(),
-		Currency:      req.GetCurrency(),
-		StockQuantity: int32(req.GetStockQuantity()),
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create product: %v", err)
-	}
-
-	return &productsv1.CreateProductResponse{
-		Product: mapDBToProto(product),
-	}, nil
 }
 
 func (c *ProductServiceHandler) DeleteProduct(ctx context.Context, req *productsv1.DeleteProductRequest) (*productsv1.DeleteProductResponse, error) {
 	ctx, span := c.startSpan(ctx, "DeleteProduct.Handler")
 	defer span.End()
 
+	const op = "delete_product"
+	timerStart := time.Now()
+
+	defer c.metrics.Duration.
+		WithLabelValues(op, dbBackend).
+		Observe(time.Since(timerStart).Seconds())
+
 	if req.GetId() == 0 {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
 		return nil, status.Errorf(codes.InvalidArgument, "id is required")
 	}
 
 	err := c.queries.DeleteProduct(ctx, req.GetId())
 	if err != nil {
+		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
 		return nil, status.Errorf(codes.Internal, "failed to delete product: %v", err)
 	}
 

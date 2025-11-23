@@ -9,3 +9,6 @@ server:
   debug: true
   gateway_port: 8080
   product_service_port: 50051
+  otlpGrpcEndpoint: 4317
+  otlpHttpEndpoint: 4318
+  prom_http_addr: 8081

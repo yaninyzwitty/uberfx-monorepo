@@ -28,6 +28,7 @@ type ServerConfig struct {
 	OTLPEndpoint       string `yaml:"otlpGrpcEndpoint"`
 	GatewayPort        int    `yaml:"gateway_port"`
 	ProductServicePort int    `yaml:"product_service_port"`
+	PromHTTPAddr       int    `yaml:"prom_http_addr"`
 }
 
 // Module exports the configuration provider
