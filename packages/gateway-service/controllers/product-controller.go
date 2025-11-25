@@ -191,7 +191,13 @@ func (h *ProductsRouteHandler) handleCreateProduct(w http.ResponseWriter, r *htt
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			h.controller.logger.Error("failed to close body", zap.Error(err))
+			http.Error(w, "failed to close request body", http.StatusBadRequest)
+		}
+
+	}()
 
 	var req productsv1.CreateProductRequest
 	if err := json.Unmarshal(body, &req); err != nil {
