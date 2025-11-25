@@ -89,7 +89,7 @@ func NewProductClient(p Params) (productsv1.ProductServiceClient, error) {
 	}(p.Logger)
 
 	// timeout interceptor for unary calls
-	timeoutUnary := timeout.UnaryClientInterceptor(500 * time.Millisecond)
+	timeoutUnary := timeout.UnaryClientInterceptor(10 * time.Second)
 
 	// build dial options and interceptors
 	dialOpts := []grpc.DialOption{
@@ -116,7 +116,7 @@ func NewProductClient(p Params) (productsv1.ProductServiceClient, error) {
 	}
 
 	// Dial
-	conn, err := grpc.Dial(targetAddr, dialOpts...)
+	conn, err := grpc.NewClient(targetAddr, dialOpts...)
 	if err != nil {
 		p.Logger.Error("failed to dial product service", zap.Error(err), zap.String("target", targetAddr))
 		return nil, err
