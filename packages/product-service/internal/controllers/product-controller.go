@@ -73,9 +73,11 @@ func (c *ProductServiceHandler) CreateProduct(ctx context.Context, req *products
 	const op = "create_product"
 	timerStart := time.Now()
 
-	defer c.metrics.Duration.
-		WithLabelValues(op, dbBackend).
-		Observe(time.Since(timerStart).Seconds())
+	defer func() {
+		c.metrics.Duration.
+			WithLabelValues(op, dbBackend).
+			Observe(time.Since(timerStart).Seconds())
+	}()
 
 	if req.GetName() == "" {
 		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
@@ -126,9 +128,11 @@ func (c *ProductServiceHandler) ListProducts(ctx context.Context, req *productsv
 	const op = "list_products"
 	timerStart := time.Now()
 
-	defer c.metrics.Duration.
-		WithLabelValues(op, dbBackend).
-		Observe(time.Since(timerStart).Seconds())
+	defer func() {
+		c.metrics.Duration.
+			WithLabelValues(op, dbBackend).
+			Observe(time.Since(timerStart).Seconds())
+	}()
 
 	pageSize := req.GetPageSize()
 	pageToken := req.GetPageToken()
@@ -166,9 +170,11 @@ func (c *ProductServiceHandler) DeleteProduct(ctx context.Context, req *products
 	const op = "delete_product"
 	timerStart := time.Now()
 
-	defer c.metrics.Duration.
-		WithLabelValues(op, dbBackend).
-		Observe(time.Since(timerStart).Seconds())
+	defer func() {
+		c.metrics.Duration.
+			WithLabelValues(op, dbBackend).
+			Observe(time.Since(timerStart).Seconds())
+	}()
 
 	if req.GetId() == 0 {
 		c.metrics.Errors.WithLabelValues(op, dbBackend).Inc()
