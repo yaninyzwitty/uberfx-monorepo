@@ -194,7 +194,6 @@ func (h *ProductsRouteHandler) handleCreateProduct(w http.ResponseWriter, r *htt
 	defer func() {
 		if err := r.Body.Close(); err != nil {
 			h.controller.logger.Error("failed to close body", zap.Error(err))
-			http.Error(w, "failed to close request body", http.StatusBadRequest)
 		}
 
 	}()
